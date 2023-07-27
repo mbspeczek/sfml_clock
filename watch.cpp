@@ -15,37 +15,47 @@ public:
         clockCenterPos{center},
         watchTime{{0, 0, 0}}
         {    
-            std::vector<std::pair<float, float>> centers;
             float rad = 3.14159265/180;
             
-            // calculate dots
+            // calculate centers border=1radius, minute=0.8radius, hour=0.5radius
+            // 60 centers each
             for(unsigned int angle = 0; angle < 360; angle += 6){
-                centers.push_back({center.first+radius*sin(angle*rad), center.second-radius*cos(angle*rad)});
+                borderCenters.push_back({center.first+radius*sin(angle*rad), center.second-radius*cos(angle*rad)});
+                minuteCenters.push_back({center.first+(radius*0.8)*sin(angle*rad), center.second-(radius*0.8)*cos(angle*rad)});
+                hourCenters.push_back({center.first+(radius/2)*sin(angle*rad), center.second-(radius/2)*cos(angle*rad)});
             }
             
-            for(unsigned int i = 0; i < centers.size(); i++){
-                dots.at(i).setPosition(centers.at(i).first-5, centers.at(i).second-5);
+            // border dots
+            for(unsigned int i = 0; i < borderCenters.size(); i++){
+                dots.at(i).setPosition(borderCenters.at(i).first-dotRadius, borderCenters.at(i).second-dotRadius);
                 if(i%5 == 0){
                     dots.at(i).setFillColor(sf::Color::Red);    /*hour dot*/
                 }
                 else{
                     dots.at(i).setFillColor(sf::Color::White); /* minute dot*/ 
                 } 
-                dots.at(i).setRadius(5);
+                dots.at(i).setRadius(dotRadius);
             }
             
-            auto tmpHour = getDotPosition(0);
-            // clock center + 5 -small dots radius
-            hourArrow = {sf::Vertex(sf::Vector2f(center.first+5, center.second+5)), sf::Vertex(sf::Vector2f(tmpHour.first,tmpHour.second))};
-            minArrow = {sf::Vertex(sf::Vector2f(center.first+5, center.second+5)), sf::Vertex(sf::Vector2f(tmpHour.first,tmpHour.second))};
+
+            // clock center + dotRadius -small dots radius
+            hourArrow = {   sf::Vertex(sf::Vector2f(center.first, center.second)), 
+                            sf::Vertex(sf::Vector2f(hourCenters.at(0).first, hourCenters.at(0).second))};
+            
+            minArrow = {   sf::Vertex(sf::Vector2f(center.first, center.second)), 
+                            sf::Vertex(sf::Vector2f(minuteCenters.at(0).first, minuteCenters.at(0).second))};
+            
+            secArrow =  {   sf::Vertex(sf::Vector2f(center.first, center.second)), 
+                            sf::Vertex(sf::Vector2f(borderCenters.at(0).first, borderCenters.at(0).second))};
         }
     
     
     // set watch at s - secounds, m - minures, h - hours
     void setWatch(int s, int m, int h){
-        watchTime = {s, m, h};
-        setArrowToPos(hourArrow, watchTime.at(2));
-        setArrowToPos(minArrow, watchTime.at(1));          
+        setArrowToPosition(s, secArrow, borderCenters);
+        setArrowToPosition(m, minArrow, minuteCenters);
+        setArrowToPosition(h, hourArrow, hourCenters);
+        watchTime = {s,m,h};
     }
 
     void draw(){
@@ -54,52 +64,38 @@ public:
         }
         renderContext.draw(hourArrow.data(), 2, sf::Lines);
         renderContext.draw(minArrow.data(), 2, sf::Lines);
+        renderContext.draw(secArrow.data(), 2, sf::Lines);
     }
 
     void pushClock(){
-        watchTime.at(0)++;
-        if(watchTime.at(0) >= 60){
-            watchTime.at(0) = 0;
-            watchTime.at(1)++;
-        }
-        if(watchTime.at(1) >= 60){
-            watchTime.at(1) = 0;
-            watchTime.at(2)++;    
-        }
-        if(watchTime.at(2) >= 12){
-            watchTime.at(2) = 0;
-            watchTime.at(1) = 0;
-            watchTime.at(0) = 0;
-        }
-        setArrowToPos(hourArrow,watchTime.at(2)*5);
-        setArrowToPos(minArrow,watchTime.at(1));
+       
     }
 
 private:
 
-    // dot position 0-59
-    std::pair<float,float> getDotPosition(int second){
-        auto Position = dots.at(second).getPosition();
-        return std::pair(Position.x+5, Position.y+5);
+    void setArrowToPosition(int position, std::array<sf::Vertex, 2>& arrow, std::vector<std::pair<float, float>>& arrowCenters){
+        auto _positon = arrowCenters.at(position);
+        arrow.at(1).position.x = _positon.first;
+        arrow.at(1).position.y = _positon.second;        
     }
-    // position 0-59
-    void setArrowToPos(std::array<sf::Vertex, 2>& arrow, int hour){
-        auto newPosition = getDotPosition(hour);
-        arrow.at(1).position.x = newPosition.first;
-        arrow.at(1).position.y = newPosition.second;
-    }
-
-
+ 
     // render context
     sf::RenderWindow &renderContext;
     // clock center
     std::pair<float, float> clockCenterPos;
+
     float radius;
+    const int dotRadius = 5;
     // dots per hours
     std::array<sf::CircleShape, 60> dots;
+    std::vector<std::pair<float, float>> borderCenters;
+    std::vector<std::pair<float, float>> minuteCenters;
+    std::vector<std::pair<float, float>> hourCenters;
     // arrows
     std::array<sf::Vertex, 2> hourArrow;
     std::array<sf::Vertex, 2> minArrow;
+    std::array<sf::Vertex, 2> secArrow;
+
     std::array<int, 3> watchTime; // seconds, minutes, hours
 };
 
@@ -107,10 +103,10 @@ int main()
 {
     sf::RenderWindow window(sf::VideoMode(500, 500), "SFML Clock");
 
-    window.setFramerateLimit(120);
+    window.setFramerateLimit(240);
 
     Clock cf{std::pair(250, 250), 200, window};
-    //cf.setWatch(0,0,0);
+    cf.setWatch(0,0,0);
 
     while(window.isOpen())
     {
@@ -128,7 +124,7 @@ int main()
 
         // logic
 
-        std::this_thread::sleep_for(std::chrono::nanoseconds(10));
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
         cf.pushClock();
                 
         // draw
